@@ -32,5 +32,14 @@ namespace GLMS.Models
 
         // One contract can have many service requests
         public List<ServiceRequest>? ServiceRequests { get; set; }
+
+        [NotMapped]
+        public string ContractDisplayName
+        {
+            get
+            {
+                return $"Contract #{Id} - {Status}";
+            }
+        }
     }
 }

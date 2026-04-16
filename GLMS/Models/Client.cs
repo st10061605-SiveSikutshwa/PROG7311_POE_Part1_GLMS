@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.Diagnostics.Contracts;
 
 namespace GLMS.Models
 {
@@ -9,15 +8,14 @@ namespace GLMS.Models
         public int Id { get; set; }
 
         [Required]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [Required]
-        public string ContactDetails { get; set; }
+        public string ContactDetails { get; set; } = string.Empty;
 
         [Required]
-        public string Region { get; set; }
+        public string Region { get; set; } = string.Empty;
 
-        // Navigation property:
         // One client can have many contracts
         public List<Contract>? Contracts { get; set; }
     }
