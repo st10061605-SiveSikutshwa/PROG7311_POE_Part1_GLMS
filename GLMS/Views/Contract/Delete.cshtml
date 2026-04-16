@@ -1,0 +1,35 @@
+﻿@model GLMS.Models.Contract
+
+@{
+    ViewData["Title"] = "Delete Contract";
+}
+
+<h1>Delete Contract</h1>
+
+<h4>Are you sure you want to delete this contract?</h4>
+
+<div class="mb-3">
+    <strong>Client:</strong> @Model.Client?.Name
+</div>
+
+<div class="mb-3">
+    <strong>Start Date:</strong> @Model.StartDate.ToShortDateString()
+</div>
+
+<div class="mb-3">
+    <strong>End Date:</strong> @Model.EndDate.ToShortDateString()
+</div>
+
+<div class="mb-3">
+    <strong>Status:</strong> @Model.Status
+</div>
+
+<div class="mb-3">
+    <strong>Service Level:</strong> @Model.ServiceLevel
+</div>
+
+<form asp-action="Delete" method="post">
+    <input type="hidden" asp-for="Id" />
+    <button type="submit" class="btn btn-danger">Delete</button>
+    <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+</form>
