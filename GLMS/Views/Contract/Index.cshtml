@@ -18,6 +18,7 @@
             <th>End Date</th>
             <th>Status</th>
             <th>Service Level</th>
+            <th>Agreement</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -31,9 +32,20 @@
                 <td>@contract.Status</td>
                 <td>@contract.ServiceLevel</td>
                 <td>
+                    @if (!string.IsNullOrEmpty(contract.SignedAgreementPath))
+                    {
+                        <a asp-action="DownloadAgreement" asp-route-id="@contract.Id" class="btn btn-info btn-sm">Download PDF</a>
+                    }
+                    else
+                    {
+                        <span>No File</span>
+                    }
+                </td>
+                <td>
                     <a asp-action="Edit" asp-route-id="@contract.Id" class="btn btn-warning btn-sm">Edit</a>
                     <a asp-action="Delete" asp-route-id="@contract.Id" class="btn btn-danger btn-sm">Delete</a>
                 </td>
+
             </tr>
         }
     </tbody>

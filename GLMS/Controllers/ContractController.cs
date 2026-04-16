@@ -1,5 +1,6 @@
 ﻿using GLMS.Data;
 using GLMS.Models;
+using GLMS.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -10,11 +11,13 @@ namespace GLMS.Controllers
     public class ContractController : Controller
     {
         private readonly AppDbContext _context;
+        private readonly FileService _fileService;
 
-        // Inject the database context into the controller
-        public ContractController(AppDbContext context)
+        // Inject the database context and file service
+        public ContractController(AppDbContext context, FileService fileService)
         {
             _context = context;
+            _fileService = fileService;
         }
 
         // Show all contracts with their linked client
@@ -30,7 +33,6 @@ namespace GLMS.Controllers
         // Show the create form
         public async Task<IActionResult> Create()
         {
-            // Load all clients into a dropdown
             ViewBag.ClientId = new SelectList(await _context.Clients.ToListAsync(), "Id", "Name");
             return View();
         }
@@ -38,16 +40,30 @@ namespace GLMS.Controllers
         // Save a new contract
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(Contract contract)
+        public async Task<IActionResult> Create(Contract contract, IFormFile? signedAgreementFile)
         {
+            // Validate the uploaded file if one was selected
+            if (signedAgreementFile != null)
+            {
+                if (!_fileService.IsPdf(signedAgreementFile))
+                {
+                    ModelState.AddModelError("", "Only PDF files are allowed.");
+                }
+            }
+
             if (ModelState.IsValid)
             {
+                // Save the PDF and store the path
+                if (signedAgreementFile != null)
+                {
+                    contract.SignedAgreementPath = await _fileService.SavePdfAsync(signedAgreementFile);
+                }
+
                 _context.Contracts.Add(contract);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
 
-            // Reload the dropdown if validation fails
             ViewBag.ClientId = new SelectList(await _context.Clients.ToListAsync(), "Id", "Name", contract.ClientId);
             return View(contract);
         }
@@ -74,17 +90,41 @@ namespace GLMS.Controllers
         // Update an existing contract
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, Contract contract)
+        public async Task<IActionResult> Edit(int id, Contract contract, IFormFile? signedAgreementFile)
         {
             if (id != contract.Id)
             {
                 return NotFound();
             }
 
+            // Keep the old path if no new file is uploaded
+            var existingContract = await _context.Contracts.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
+            if (existingContract == null)
+            {
+                return NotFound();
+            }
+
+            contract.SignedAgreementPath = existingContract.SignedAgreementPath;
+
+            // Validate the uploaded file if one was selected
+            if (signedAgreementFile != null)
+            {
+                if (!_fileService.IsPdf(signedAgreementFile))
+                {
+                    ModelState.AddModelError("", "Only PDF files are allowed.");
+                }
+            }
+
             if (ModelState.IsValid)
             {
                 try
                 {
+                    // Save new file if uploaded
+                    if (signedAgreementFile != null)
+                    {
+                        contract.SignedAgreementPath = await _fileService.SavePdfAsync(signedAgreementFile);
+                    }
+
                     _context.Update(contract);
                     await _context.SaveChangesAsync();
                 }
@@ -141,6 +181,27 @@ namespace GLMS.Controllers
             }
 
             return RedirectToAction(nameof(Index));
+        }
+
+        // Download the uploaded PDF
+        public async Task<IActionResult> DownloadAgreement(int id)
+        {
+            var contract = await _context.Contracts.FindAsync(id);
+
+            if (contract == null || string.IsNullOrEmpty(contract.SignedAgreementPath))
+            {
+                return NotFound();
+            }
+
+            string fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", contract.SignedAgreementPath.TrimStart('/'));
+
+            if (!System.IO.File.Exists(fullPath))
+            {
+                return NotFound();
+            }
+
+            var fileBytes = await System.IO.File.ReadAllBytesAsync(fullPath);
+            return File(fileBytes, "application/pdf", "SignedAgreement.pdf");
         }
 
         // Helper method to check if a contract exists

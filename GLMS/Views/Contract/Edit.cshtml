@@ -6,7 +6,7 @@
 
 <h1>Edit Contract</h1>
 
-<form asp-action="Edit" method="post">
+<form asp-action="Edit" method="post" enctype="multipart/form-data">
     <input type="hidden" asp-for="Id" />
 
     <div class="mb-3">
@@ -45,6 +45,19 @@
         <input asp-for="ServiceLevel" class="form-control" />
         <span asp-validation-for="ServiceLevel" class="text-danger"></span>
     </div>
+
+    <div class="mb-3">
+        <label class="form-label">Replace Signed Agreement (PDF only)</label>
+        <input type="file" name="signedAgreementFile" class="form-control" accept=".pdf" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.SignedAgreementPath))
+    {
+        <div class="mb-3">
+            <strong>Current File:</strong>
+            <a asp-action="DownloadAgreement" asp-route-id="@Model.Id" class="btn btn-sm btn-info">Download Current PDF</a>
+        </div>
+    }
 
     <button type="submit" class="btn btn-primary">Update Contract</button>
     <a asp-action="Index" class="btn btn-secondary">Back to List</a>
