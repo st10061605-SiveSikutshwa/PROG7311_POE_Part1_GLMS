@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <Folder Include="Data\" />
+    <Folder Include="Services\" />
+    <Folder Include="ViewModels\uploads\" />
   </ItemGroup>
 
 </Project>
