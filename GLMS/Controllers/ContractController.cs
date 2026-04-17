@@ -1,6 +1,7 @@
 ﻿using GLMS.Data;
 using GLMS.Models;
 using GLMS.Services;
+using GLMS.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -20,14 +21,42 @@ namespace GLMS.Controllers
             _fileService = fileService;
         }
 
-        // Show all contracts with their linked client
-        public async Task<IActionResult> Index()
+        // Show all contracts with optional filtering
+        public async Task<IActionResult> Index(string? status, DateTime? startDateFrom, DateTime? endDateTo)
         {
-            var contracts = await _context.Contracts
+            // Start with all contracts and include the linked client
+            var query = _context.Contracts
                 .Include(c => c.Client)
-                .ToListAsync();
+                .AsQueryable();
 
-            return View(contracts);
+            // Filter by status if the user selected one
+            if (!string.IsNullOrEmpty(status))
+            {
+                query = query.Where(c => c.Status == status);
+            }
+
+            // Filter contracts that start on or after the selected start date
+            if (startDateFrom.HasValue)
+            {
+                query = query.Where(c => c.StartDate >= startDateFrom.Value);
+            }
+
+            // Filter contracts that end on or before the selected end date
+            if (endDateTo.HasValue)
+            {
+                query = query.Where(c => c.EndDate <= endDateTo.Value);
+            }
+
+            // Put the results into the view model
+            var viewModel = new ContractFilterViewModel
+            {
+                Status = status,
+                StartDateFrom = startDateFrom,
+                EndDateTo = endDateTo,
+                Contracts = await query.ToListAsync()
+            };
+
+            return View(viewModel);
         }
 
         // Show the create form
@@ -97,7 +126,7 @@ namespace GLMS.Controllers
                 return NotFound();
             }
 
-            // Keep the old path if no new file is uploaded
+            // Keep the old file path if no new file is uploaded
             var existingContract = await _context.Contracts.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
             if (existingContract == null)
             {
@@ -106,7 +135,6 @@ namespace GLMS.Controllers
 
             contract.SignedAgreementPath = existingContract.SignedAgreementPath;
 
-            // Validate the uploaded file if one was selected
             if (signedAgreementFile != null)
             {
                 if (!_fileService.IsPdf(signedAgreementFile))
@@ -119,7 +147,6 @@ namespace GLMS.Controllers
             {
                 try
                 {
-                    // Save new file if uploaded
                     if (signedAgreementFile != null)
                     {
                         contract.SignedAgreementPath = await _fileService.SavePdfAsync(signedAgreementFile);
@@ -193,7 +220,8 @@ namespace GLMS.Controllers
                 return NotFound();
             }
 
-            string fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", contract.SignedAgreementPath.TrimStart('/'));
+            string relativePath = contract.SignedAgreementPath.TrimStart('/').Replace("/", Path.DirectorySeparatorChar.ToString());
+            string fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath);
 
             if (!System.IO.File.Exists(fullPath))
             {
