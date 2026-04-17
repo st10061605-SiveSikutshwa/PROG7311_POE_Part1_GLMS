@@ -18,11 +18,15 @@ namespace GLMS.Models
         [Required]
         public string Description { get; set; } = string.Empty;
 
-        // This will hold the local cost for now
-        // Later we will improve this with the currency API
+        // Amount entered by the user in USD
         [Required]
         [Range(0, double.MaxValue)]
-        public decimal Cost { get; set; }
+        public decimal CostUSD { get; set; }
+
+        // Converted amount saved in ZAR
+        [Required]
+        [Range(0, double.MaxValue)]
+        public decimal CostZAR { get; set; }
 
         [Required]
         public string Status { get; set; } = string.Empty;

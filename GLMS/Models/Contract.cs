@@ -22,10 +22,10 @@ namespace GLMS.Models
         public DateTime EndDate { get; set; }
 
         [Required]
-        public string Status { get; set; }
+        public string Status { get; set; } = string.Empty;
 
         [Required]
-        public string ServiceLevel { get; set; }
+        public string ServiceLevel { get; set; } = string.Empty;
 
         // This will store the path to the uploaded signed agreement PDF
         public string? SignedAgreementPath { get; set; }

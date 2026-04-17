@@ -12,12 +12,17 @@ namespace GLMS.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ContractValidationService _contractValidationService;
+        private readonly CurrencyService _currencyService;
 
-        // Inject the database context and validation service
-        public ServiceRequestController(AppDbContext context, ContractValidationService contractValidationService)
+        // Inject the database context and service classes
+        public ServiceRequestController(
+            AppDbContext context,
+            ContractValidationService contractValidationService,
+            CurrencyService currencyService)
         {
             _context = context;
             _contractValidationService = contractValidationService;
+            _currencyService = currencyService;
         }
 
         // Show all service requests with linked contract data
@@ -34,7 +39,12 @@ namespace GLMS.Controllers
         // Show the create form
         public async Task<IActionResult> Create()
         {
-            ViewBag.ContractId = new SelectList(await _context.Contracts.Include(c => c.Client).ToListAsync(), "Id", "ContractDisplayName");
+            ViewBag.ContractId = new SelectList(
+                await _context.Contracts.Include(c => c.Client).ToListAsync(),
+                "Id",
+                "ContractDisplayName"
+            );
+
             return View();
         }
 
@@ -52,7 +62,7 @@ namespace GLMS.Controllers
             }
             else
             {
-                // Apply the business rule from the POE
+                // Apply the business rule
                 if (!_contractValidationService.CanCreateServiceRequest(contract))
                 {
                     ModelState.AddModelError("", "A service request cannot be created for a contract that is Expired or On Hold.");
@@ -61,12 +71,32 @@ namespace GLMS.Controllers
 
             if (ModelState.IsValid)
             {
-                _context.ServiceRequests.Add(serviceRequest);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                try
+                {
+                    // Get the latest exchange rate from the API
+                    decimal exchangeRate = await _currencyService.GetUsdToZarRateAsync();
+
+                    // Convert USD to ZAR and save the result
+                    serviceRequest.CostZAR = _currencyService.ConvertUsdToZar(serviceRequest.CostUSD, exchangeRate);
+
+                    _context.ServiceRequests.Add(serviceRequest);
+                    await _context.SaveChangesAsync();
+
+                    return RedirectToAction(nameof(Index));
+                }
+                catch (Exception)
+                {
+                    ModelState.AddModelError("", "Could not get the latest exchange rate. Please try again.");
+                }
             }
 
-            ViewBag.ContractId = new SelectList(await _context.Contracts.Include(c => c.Client).ToListAsync(), "Id", "Id", serviceRequest.ContractId);
+            ViewBag.ContractId = new SelectList(
+                await _context.Contracts.Include(c => c.Client).ToListAsync(),
+                "Id",
+                "ContractDisplayName",
+                serviceRequest.ContractId
+            );
+
             return View(serviceRequest);
         }
 
@@ -85,7 +115,13 @@ namespace GLMS.Controllers
                 return NotFound();
             }
 
-            ViewBag.ContractId = new SelectList(await _context.Contracts.Include(c => c.Client).ToListAsync(), "Id", "Id", serviceRequest.ContractId);
+            ViewBag.ContractId = new SelectList(
+                await _context.Contracts.Include(c => c.Client).ToListAsync(),
+                "Id",
+                "ContractDisplayName",
+                serviceRequest.ContractId
+            );
+
             return View(serviceRequest);
         }
 
@@ -103,6 +139,10 @@ namespace GLMS.Controllers
             {
                 try
                 {
+                    // Recalculate ZAR amount whenever USD amount changes
+                    decimal exchangeRate = await _currencyService.GetUsdToZarRateAsync();
+                    serviceRequest.CostZAR = _currencyService.ConvertUsdToZar(serviceRequest.CostUSD, exchangeRate);
+
                     _context.Update(serviceRequest);
                     await _context.SaveChangesAsync();
                 }
@@ -117,11 +157,21 @@ namespace GLMS.Controllers
                         throw;
                     }
                 }
+                catch (Exception)
+                {
+                    ModelState.AddModelError("", "Could not get the latest exchange rate. Please try again.");
+                }
 
                 return RedirectToAction(nameof(Index));
             }
 
-            ViewBag.ContractId = new SelectList(await _context.Contracts.Include(c => c.Client).ToListAsync(), "Id", "Id", serviceRequest.ContractId);
+            ViewBag.ContractId = new SelectList(
+                await _context.Contracts.Include(c => c.Client).ToListAsync(),
+                "Id",
+                "ContractDisplayName",
+                serviceRequest.ContractId
+            );
+
             return View(serviceRequest);
         }
 
