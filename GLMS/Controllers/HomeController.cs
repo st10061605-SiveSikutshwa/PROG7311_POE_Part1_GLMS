@@ -18,7 +18,7 @@ namespace GLMS.Controllers
             return View();
         }
 
-        public IActionResult Privacy()
+        public IActionResult References()
         {
             return View();
         }
