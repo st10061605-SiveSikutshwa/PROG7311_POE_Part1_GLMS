@@ -1,32 +1,20 @@
-using GLMS.Models;
 using Microsoft.AspNetCore.Mvc;
-using System.Diagnostics;
 
 namespace GLMS.Controllers
 {
+    // This controller handles the home page and general pages
     public class HomeController : Controller
     {
-        private readonly ILogger<HomeController> _logger;
-
-        public HomeController(ILogger<HomeController> logger)
-        {
-            _logger = logger;
-        }
-
+        // Show the landing page
         public IActionResult Index()
         {
             return View();
         }
 
+        // Show the references page
         public IActionResult References()
         {
             return View();
-        }
-
-        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-        public IActionResult Error()
-        {
-            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
         }
     }
 }

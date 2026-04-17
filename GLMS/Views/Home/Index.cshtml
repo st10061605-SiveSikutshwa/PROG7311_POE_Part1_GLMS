@@ -1,8 +1,95 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Home";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<!-- Main landing section for the GLMS home page -->
+<div class="container mt-4">
+
+    <!-- Hero section -->
+    <div class="row align-items-center mb-5">
+        <div class="col-md-6">
+            <h1 class="display-5 fw-bold">Global Logistics Management System</h1>
+            <p class="lead">
+                A central platform for managing clients, contracts, service requests, and supporting logistics workflows
+                in a more structured and efficient way.
+            </p>
+            <p>
+                The GLMS application was developed to help TechMove Logistics reduce manual admin work,
+                improve contract tracking, support service request processing, and strengthen business operations
+                with a more modern enterprise system.
+            </p>
+        </div>
+
+        <div class="col-md-6 text-center">
+            <img src="~/images/logistics-hero.jpg"
+                 alt="Logistics management"
+                 class="img-fluid rounded shadow" />
+        </div>
+    </div>
+
+    <!-- Introductory summary section -->
+    <div class="card shadow-sm mb-5">
+        <div class="card-body">
+            <h2 class="h4 mb-3">About the App</h2>
+            <p>
+                The Global Logistics Management System (GLMS) is an ASP.NET Core MVC application designed
+                to support enterprise logistics processes. The system allows users to manage clients,
+                create and maintain contracts, upload signed agreement PDFs, process service requests,
+                and apply important business rules such as preventing service requests on expired or on-hold contracts.
+            </p>
+            <p>
+                The application also integrates with an external currency API to convert USD values into ZAR,
+                helping users work with international costs more effectively. Overall, the system aims to improve
+                visibility, control, and efficiency within the logistics environment.
+            </p>
+        </div>
+    </div>
+
+    <!-- Navigation section -->
+    <div class="mb-4">
+        <h2 class="h4 mb-3">Navigate Through the System</h2>
+        <p>Select a section below to continue working in the application.</p>
+    </div>
+
+    <div class="row g-3 mb-5">
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h3 class="h5">Clients</h3>
+                    <p>Manage client details and keep track of business regions and contact information.</p>
+                    <a asp-controller="Client" asp-action="Index" class="btn btn-primary">Go to Clients</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h3 class="h5">Contracts</h3>
+                    <p>Create contracts, manage service levels, upload signed agreements, and filter records.</p>
+                    <a asp-controller="Contract" asp-action="Index" class="btn btn-success">Go to Contracts</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h3 class="h5">Service Requests</h3>
+                    <p>Capture service requests, apply workflow validation, and store converted currency values.</p>
+                    <a asp-controller="ServiceRequest" asp-action="Index" class="btn btn-warning text-dark">Go to Service Requests</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h3 class="h5">References</h3>
+                    <p>View the academic and technical references used to support the concepts in the application.</p>
+                    <a asp-controller="Home" asp-action="References" class="btn btn-secondary">Go to References</a>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
