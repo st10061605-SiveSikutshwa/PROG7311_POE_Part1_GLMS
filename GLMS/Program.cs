@@ -20,6 +20,11 @@ builder.Services.AddScoped<CurrencyService>();
 builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<ContractValidationService>();
 
+builder.Services.AddHttpClient("GLMSApi", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["ApiSettings:BaseUrl"]);
+});
+
 var app = builder.Build();
 
 // This runs when the app is not in development mode

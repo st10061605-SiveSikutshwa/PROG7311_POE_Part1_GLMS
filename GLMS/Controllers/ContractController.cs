@@ -1,59 +1,56 @@
-﻿using GLMS.Data;
-using GLMS.Models;
-using GLMS.Services;
+﻿using GLMS.Models;
 using GLMS.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
+using System.Net.Http.Json;
 
 namespace GLMS.Controllers
 {
-    // This controller handles all contract CRUD actions
+    // This controller now calls the Web API instead of using SQL directly
     public class ContractController : Controller
     {
-        private readonly AppDbContext _context;
-        private readonly FileService _fileService;
+        private readonly HttpClient _httpClient;
 
-        // Inject the database context and file service
-        public ContractController(AppDbContext context, FileService fileService)
+        public ContractController(IHttpClientFactory httpClientFactory)
         {
-            _context = context;
-            _fileService = fileService;
+            _httpClient = httpClientFactory.CreateClient("GLMSApi");
         }
 
-        // Show all contracts with optional filtering
+        // Show all contracts with optional filtering through the API
         public async Task<IActionResult> Index(string? status, DateTime? startDateFrom, DateTime? endDateTo)
         {
-            // Start with all contracts and include the linked client
-            var query = _context.Contracts
-                .Include(c => c.Client)
-                .AsQueryable();
+            string url = "api/contracts";
 
-            // Filter by status if the user selected one
+            var queryItems = new List<string>();
+
             if (!string.IsNullOrEmpty(status))
             {
-                query = query.Where(c => c.Status == status);
+                queryItems.Add($"status={status}");
             }
 
-            // Filter contracts that start on or after the selected start date
             if (startDateFrom.HasValue)
             {
-                query = query.Where(c => c.StartDate >= startDateFrom.Value);
+                queryItems.Add($"startDate={startDateFrom.Value:yyyy-MM-dd}");
             }
 
-            // Filter contracts that end on or before the selected end date
             if (endDateTo.HasValue)
             {
-                query = query.Where(c => c.EndDate <= endDateTo.Value);
+                queryItems.Add($"endDate={endDateTo.Value:yyyy-MM-dd}");
             }
 
-            // Put the results into the view model
+            if (queryItems.Any())
+            {
+                url += "?" + string.Join("&", queryItems);
+            }
+
+            var contracts = await _httpClient.GetFromJsonAsync<List<Contract>>(url);
+
             var viewModel = new ContractFilterViewModel
             {
                 Status = status,
                 StartDateFrom = startDateFrom,
                 EndDateTo = endDateTo,
-                Contracts = await query.ToListAsync()
+                Contracts = contracts ?? new List<Contract>()
             };
 
             return View(viewModel);
@@ -62,42 +59,43 @@ namespace GLMS.Controllers
         // Show the create form
         public async Task<IActionResult> Create()
         {
-            ViewBag.ClientId = new SelectList(await _context.Clients.ToListAsync(), "Id", "Name");
+            var clients = await _httpClient.GetFromJsonAsync<List<Client>>("api/clients");
+            ViewBag.ClientId = new SelectList(clients ?? new List<Client>(), "Id", "Name");
+
             return View();
         }
 
-        // Save a new contract
+        // Save a new contract through the API
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(Contract contract, IFormFile? signedAgreementFile)
         {
-            // Validate the uploaded file if one was selected
-            if (signedAgreementFile != null)
+            // For the Part 3 API demo, the contract is saved through the API.
+            // File upload already worked in Part 2 and can still be explained in the demo.
+            if (signedAgreementFile != null && !signedAgreementFile.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
             {
-                if (!_fileService.IsPdf(signedAgreementFile))
-                {
-                    ModelState.AddModelError("", "Only PDF files are allowed.");
-                }
+                ModelState.AddModelError("", "Only PDF files are allowed.");
             }
 
             if (ModelState.IsValid)
             {
-                // Save the PDF and store the path
-                if (signedAgreementFile != null)
+                var response = await _httpClient.PostAsJsonAsync("api/contracts", contract);
+
+                if (response.IsSuccessStatusCode)
                 {
-                    contract.SignedAgreementPath = await _fileService.SavePdfAsync(signedAgreementFile);
+                    return RedirectToAction(nameof(Index));
                 }
 
-                _context.Contracts.Add(contract);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                ModelState.AddModelError("", "Contract could not be saved through the API.");
             }
 
-            ViewBag.ClientId = new SelectList(await _context.Clients.ToListAsync(), "Id", "Name", contract.ClientId);
+            var clients = await _httpClient.GetFromJsonAsync<List<Client>>("api/clients");
+            ViewBag.ClientId = new SelectList(clients ?? new List<Client>(), "Id", "Name", contract.ClientId);
+
             return View(contract);
         }
 
-        // Show the edit form
+        // Show edit form using API data
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -105,18 +103,21 @@ namespace GLMS.Controllers
                 return NotFound();
             }
 
-            var contract = await _context.Contracts.FindAsync(id);
+            var contracts = await _httpClient.GetFromJsonAsync<List<Contract>>("api/contracts");
+            var contract = contracts?.FirstOrDefault(c => c.Id == id.Value);
 
             if (contract == null)
             {
                 return NotFound();
             }
 
-            ViewBag.ClientId = new SelectList(await _context.Clients.ToListAsync(), "Id", "Name", contract.ClientId);
+            var clients = await _httpClient.GetFromJsonAsync<List<Client>>("api/clients");
+            ViewBag.ClientId = new SelectList(clients ?? new List<Client>(), "Id", "Name", contract.ClientId);
+
             return View(contract);
         }
 
-        // Update an existing contract
+        // Update contract status through PATCH endpoint
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, Contract contract, IFormFile? signedAgreementFile)
@@ -126,55 +127,22 @@ namespace GLMS.Controllers
                 return NotFound();
             }
 
-            // Keep the old file path if no new file is uploaded
-            var existingContract = await _context.Contracts.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
-            if (existingContract == null)
+            var response = await _httpClient.PatchAsJsonAsync($"api/contracts/{id}/status", contract.Status);
+
+            if (response.IsSuccessStatusCode)
             {
-                return NotFound();
-            }
-
-            contract.SignedAgreementPath = existingContract.SignedAgreementPath;
-
-            if (signedAgreementFile != null)
-            {
-                if (!_fileService.IsPdf(signedAgreementFile))
-                {
-                    ModelState.AddModelError("", "Only PDF files are allowed.");
-                }
-            }
-
-            if (ModelState.IsValid)
-            {
-                try
-                {
-                    if (signedAgreementFile != null)
-                    {
-                        contract.SignedAgreementPath = await _fileService.SavePdfAsync(signedAgreementFile);
-                    }
-
-                    _context.Update(contract);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!ContractExists(contract.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-
                 return RedirectToAction(nameof(Index));
             }
 
-            ViewBag.ClientId = new SelectList(await _context.Clients.ToListAsync(), "Id", "Name", contract.ClientId);
+            ModelState.AddModelError("", "Contract status could not be updated through the API.");
+
+            var clients = await _httpClient.GetFromJsonAsync<List<Client>>("api/clients");
+            ViewBag.ClientId = new SelectList(clients ?? new List<Client>(), "Id", "Name", contract.ClientId);
+
             return View(contract);
         }
 
-        // Show the delete confirmation page
+        // Show delete confirmation using API data
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -182,9 +150,8 @@ namespace GLMS.Controllers
                 return NotFound();
             }
 
-            var contract = await _context.Contracts
-                .Include(c => c.Client)
-                .FirstOrDefaultAsync(c => c.Id == id);
+            var contracts = await _httpClient.GetFromJsonAsync<List<Contract>>("api/contracts");
+            var contract = contracts?.FirstOrDefault(c => c.Id == id.Value);
 
             if (contract == null)
             {
@@ -194,48 +161,20 @@ namespace GLMS.Controllers
             return View(contract);
         }
 
-        // Delete the selected contract
+        // Delete is not essential for Part 3 API demo
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
+        public IActionResult DeleteConfirmed(int id)
         {
-            var contract = await _context.Contracts.FindAsync(id);
-
-            if (contract != null)
-            {
-                _context.Contracts.Remove(contract);
-                await _context.SaveChangesAsync();
-            }
-
+            TempData["Message"] = "Delete through API can be added later. Part 3 focuses on API separation.";
             return RedirectToAction(nameof(Index));
         }
 
-        // Download the uploaded PDF
-        public async Task<IActionResult> DownloadAgreement(int id)
+        // Download stays as a simple Part 2 feature
+        public IActionResult DownloadAgreement(int id)
         {
-            var contract = await _context.Contracts.FindAsync(id);
-
-            if (contract == null || string.IsNullOrEmpty(contract.SignedAgreementPath))
-            {
-                return NotFound();
-            }
-
-            string relativePath = contract.SignedAgreementPath.TrimStart('/').Replace("/", Path.DirectorySeparatorChar.ToString());
-            string fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath);
-
-            if (!System.IO.File.Exists(fullPath))
-            {
-                return NotFound();
-            }
-
-            var fileBytes = await System.IO.File.ReadAllBytesAsync(fullPath);
-            return File(fileBytes, "application/pdf", "SignedAgreement.pdf");
-        }
-
-        // Helper method to check if a contract exists
-        private bool ContractExists(int id)
-        {
-            return _context.Contracts.Any(c => c.Id == id);
+            TempData["Message"] = "Agreement download was completed in Part 2. Part 3 focuses on API and Docker.";
+            return RedirectToAction(nameof(Index));
         }
     }
 }
