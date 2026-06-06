@@ -1,4 +1,3 @@
-using GLMS.API.Data;
 using GLMS.Data;
 using Microsoft.EntityFrameworkCore;
 
