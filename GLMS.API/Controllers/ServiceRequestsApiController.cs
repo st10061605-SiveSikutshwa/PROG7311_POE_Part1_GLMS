@@ -42,7 +42,7 @@ namespace GLMS.API.Controllers
                 return NotFound("Contract not found.");
             }
 
-            if (!_contractValidationService.CanCreateServiceRequest(contract.Status))
+            if (!_contractValidationService.CanCreateServiceRequest(contract))
             {
                 return BadRequest("Service request cannot be created for Expired or On Hold contracts.");
             }
