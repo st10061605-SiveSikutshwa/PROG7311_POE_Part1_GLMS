@@ -1,11 +1,16 @@
 using GLMS.Data;
 using GLMS.Services;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Adds controllers for API endpoints
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+    });
 
 // Adds Swagger / OpenAPI
 builder.Services.AddEndpointsApiExplorer();
