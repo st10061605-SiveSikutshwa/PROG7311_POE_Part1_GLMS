@@ -1,46 +1,40 @@
-﻿using GLMS.Data;
-using GLMS.Models;
+﻿using GLMS.Models;
 using GLMS.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
+using System.Net.Http.Json;
 
 namespace GLMS.Controllers
 {
-    // This controller handles service request CRUD actions
+    // This controller now talks to the Web API instead of the database directly
     public class ServiceRequestController : Controller
     {
-        private readonly AppDbContext _context;
-        private readonly ContractValidationService _contractValidationService;
+        private readonly HttpClient _httpClient;
         private readonly CurrencyService _currencyService;
 
-        // Inject the database context and service classes
         public ServiceRequestController(
-            AppDbContext context,
-            ContractValidationService contractValidationService,
+            IHttpClientFactory httpClientFactory,
             CurrencyService currencyService)
         {
-            _context = context;
-            _contractValidationService = contractValidationService;
+            _httpClient = httpClientFactory.CreateClient("GLMSApi");
             _currencyService = currencyService;
         }
 
-        // Show all service requests with linked contract data
+        // Show all service requests from the API
         public async Task<IActionResult> Index()
         {
-            var serviceRequests = await _context.ServiceRequests
-                .Include(sr => sr.Contract)
-                .ThenInclude(c => c.Client)
-                .ToListAsync();
+            var serviceRequests = await _httpClient.GetFromJsonAsync<List<ServiceRequest>>("api/servicerequests");
 
-            return View(serviceRequests);
+            return View(serviceRequests ?? new List<ServiceRequest>());
         }
 
         // Show the create form
         public async Task<IActionResult> Create()
         {
+            var contracts = await _httpClient.GetFromJsonAsync<List<Contract>>("api/contracts");
+
             ViewBag.ContractId = new SelectList(
-                await _context.Contracts.Include(c => c.Client).ToListAsync(),
+                contracts ?? new List<Contract>(),
                 "Id",
                 "ContractDisplayName"
             );
@@ -48,50 +42,39 @@ namespace GLMS.Controllers
             return View();
         }
 
-        // Save a new service request
+        // Save a new service request through the API
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(ServiceRequest serviceRequest)
         {
-            // Find the linked contract
-            var contract = await _context.Contracts.FindAsync(serviceRequest.ContractId);
-
-            if (contract == null)
-            {
-                ModelState.AddModelError("", "The selected contract could not be found.");
-            }
-            else
-            {
-                // Apply the business rule
-                if (!_contractValidationService.CanCreateServiceRequest(contract))
-                {
-                    ModelState.AddModelError("", "A service request cannot be created for a contract that is Expired or On Hold.");
-                }
-            }
-
             if (ModelState.IsValid)
             {
                 try
                 {
-                    // Get the latest exchange rate from the API
+                    // Currency conversion is still done before sending the request to the API
                     decimal exchangeRate = await _currencyService.GetUsdToZarRateAsync();
-
-                    // Convert USD to ZAR and save the result
                     serviceRequest.CostZAR = _currencyService.ConvertUsdToZar(serviceRequest.CostUSD, exchangeRate);
 
-                    _context.ServiceRequests.Add(serviceRequest);
-                    await _context.SaveChangesAsync();
+                    var response = await _httpClient.PostAsJsonAsync("api/servicerequests", serviceRequest);
 
-                    return RedirectToAction(nameof(Index));
+                    if (response.IsSuccessStatusCode)
+                    {
+                        return RedirectToAction(nameof(Index));
+                    }
+
+                    var errorMessage = await response.Content.ReadAsStringAsync();
+                    ModelState.AddModelError("", errorMessage);
                 }
                 catch (Exception)
                 {
-                    ModelState.AddModelError("", "Could not get the latest exchange rate. Please try again.");
+                    ModelState.AddModelError("", "Could not create the service request through the API.");
                 }
             }
 
+            var contracts = await _httpClient.GetFromJsonAsync<List<Contract>>("api/contracts");
+
             ViewBag.ContractId = new SelectList(
-                await _context.Contracts.Include(c => c.Client).ToListAsync(),
+                contracts ?? new List<Contract>(),
                 "Id",
                 "ContractDisplayName",
                 serviceRequest.ContractId
@@ -100,7 +83,7 @@ namespace GLMS.Controllers
             return View(serviceRequest);
         }
 
-        // Show the edit form
+        // Show edit form using API data
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -108,15 +91,18 @@ namespace GLMS.Controllers
                 return NotFound();
             }
 
-            var serviceRequest = await _context.ServiceRequests.FindAsync(id);
+            var serviceRequests = await _httpClient.GetFromJsonAsync<List<ServiceRequest>>("api/servicerequests");
+            var serviceRequest = serviceRequests?.FirstOrDefault(sr => sr.Id == id.Value);
 
             if (serviceRequest == null)
             {
                 return NotFound();
             }
 
+            var contracts = await _httpClient.GetFromJsonAsync<List<Contract>>("api/contracts");
+
             ViewBag.ContractId = new SelectList(
-                await _context.Contracts.Include(c => c.Client).ToListAsync(),
+                contracts ?? new List<Contract>(),
                 "Id",
                 "ContractDisplayName",
                 serviceRequest.ContractId
@@ -125,7 +111,7 @@ namespace GLMS.Controllers
             return View(serviceRequest);
         }
 
-        // Update an existing service request
+        // Edit is kept simple for Part 3 because the main focus is API separation
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, ServiceRequest serviceRequest)
@@ -135,38 +121,12 @@ namespace GLMS.Controllers
                 return NotFound();
             }
 
-            if (ModelState.IsValid)
-            {
-                try
-                {
-                    // Recalculate ZAR amount whenever USD amount changes
-                    decimal exchangeRate = await _currencyService.GetUsdToZarRateAsync();
-                    serviceRequest.CostZAR = _currencyService.ConvertUsdToZar(serviceRequest.CostUSD, exchangeRate);
+            ModelState.AddModelError("", "Edit through API can be added later. Current Part 3 focus is API decoupling.");
 
-                    _context.Update(serviceRequest);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!ServiceRequestExists(serviceRequest.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                catch (Exception)
-                {
-                    ModelState.AddModelError("", "Could not get the latest exchange rate. Please try again.");
-                }
-
-                return RedirectToAction(nameof(Index));
-            }
+            var contracts = await _httpClient.GetFromJsonAsync<List<Contract>>("api/contracts");
 
             ViewBag.ContractId = new SelectList(
-                await _context.Contracts.Include(c => c.Client).ToListAsync(),
+                contracts ?? new List<Contract>(),
                 "Id",
                 "ContractDisplayName",
                 serviceRequest.ContractId
@@ -175,7 +135,7 @@ namespace GLMS.Controllers
             return View(serviceRequest);
         }
 
-        // Show the delete confirmation page
+        // Show delete confirmation using API data
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -183,10 +143,8 @@ namespace GLMS.Controllers
                 return NotFound();
             }
 
-            var serviceRequest = await _context.ServiceRequests
-                .Include(sr => sr.Contract)
-                .ThenInclude(c => c.Client)
-                .FirstOrDefaultAsync(sr => sr.Id == id);
+            var serviceRequests = await _httpClient.GetFromJsonAsync<List<ServiceRequest>>("api/servicerequests");
+            var serviceRequest = serviceRequests?.FirstOrDefault(sr => sr.Id == id.Value);
 
             if (serviceRequest == null)
             {
@@ -196,26 +154,13 @@ namespace GLMS.Controllers
             return View(serviceRequest);
         }
 
-        // Delete the selected service request
+        // Delete is kept simple for Part 3
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
+        public IActionResult DeleteConfirmed(int id)
         {
-            var serviceRequest = await _context.ServiceRequests.FindAsync(id);
-
-            if (serviceRequest != null)
-            {
-                _context.ServiceRequests.Remove(serviceRequest);
-                await _context.SaveChangesAsync();
-            }
-
+            TempData["Message"] = "Delete through API can be added later. Current Part 3 focus is API decoupling.";
             return RedirectToAction(nameof(Index));
-        }
-
-        // Helper method to check if a service request exists
-        private bool ServiceRequestExists(int id)
-        {
-            return _context.ServiceRequests.Any(sr => sr.Id == id);
         }
     }
 }
